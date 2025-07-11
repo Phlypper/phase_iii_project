@@ -1,16 +1,20 @@
 const express = require("express");
 const path = require("path");
-const da = require("./data-access"); // ✅ New import
+const da = require("./data-access");
 
 const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ New route to get customer list
 app.get("/customers", async (req, res) => {
-  const cust = await da.getCustomers();
-  res.send(cust);
+  const [cust, err] = await da.getCustomers();
+  if (cust) {
+    res.send(cust);
+  } else {
+    res.status(500);
+    res.send(err);
+  }
 });
 
 app.listen(port, () => {
