@@ -17,6 +17,17 @@ app.get("/customers", async (req, res) => {
   }
 });
 
+// ✅ New /reset route
+app.get("/reset", async (req, res) => {
+  const [result, err] = await da.resetCustomers();
+  if (result) {
+    res.send(result);
+  } else {
+    res.status(500);
+    res.send(err);
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
