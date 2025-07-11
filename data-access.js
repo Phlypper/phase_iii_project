@@ -64,5 +64,18 @@ async function addCustomer(newCustomer) {
   }
 }
 
+async function getCustomerById(id) {
+  try {
+    const customer = await collection.findOne({ id: +id }); // ensures numeric lookup
+    if (!customer) {
+      return [null, "invalid customer number"];
+    }
+    return [customer, null];
+  } catch (err) {
+    console.log(err.message);
+    return [null, err.message];
+  }
+}
+
 dbStartup();
-module.exports = { getCustomers, resetCustomers, addCustomer };
+module.exports = { getCustomers, resetCustomers, addCustomer, getCustomerById };
