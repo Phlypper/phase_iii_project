@@ -113,3 +113,4 @@ app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 // Stage10 CLI support is working ✅
+// Stage 11: CLI API key override support added ✅
