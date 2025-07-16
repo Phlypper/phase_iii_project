@@ -1,17 +1,35 @@
+require("dotenv").config();
 const express = require("express");
 const path = require("path");
-const bodyParser = require("body-parser"); // ✅ Required for parsing POST bodies
+const bodyParser = require("body-parser");
 const da = require("./data-access");
+const verifyApiKey = require("./auth-middleware");
 
 const app = express();
 const port = process.env.PORT || 4000;
 
+// Check for API_KEY in env or CLI
+let apiKey = process.env.API_KEY;
+const cliArg = process.argv.find((arg) => arg.startsWith("api_key="));
+if (cliArg) {
+  apiKey = cliArg.split("=")[1];
+}
+
+// Exit if no API_KEY is set
+if (!apiKey) {
+  console.error(
+    "❌ API Key not set. Please provide it via .env or as a command-line argument: api_key=yourkey"
+  );
+  process.exit(1);
+}
+app.locals.apiKey = apiKey;
+
 // Middleware setup
-app.use(bodyParser.json()); // ✅ Must come before route handling
+app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// GET all customers
-app.get("/customers", async (req, res) => {
+// GET all customers (✔️ Protected)
+app.get("/customers", verifyApiKey, async (req, res) => {
   const [cust, err] = await da.getCustomers();
   if (cust) {
     res.send(cust);
@@ -20,8 +38,8 @@ app.get("/customers", async (req, res) => {
   }
 });
 
-// GET reset endpoint
-app.get("/reset", async (req, res) => {
+// GET reset endpoint (✔️ Protected)
+app.get("/reset", verifyApiKey, async (req, res) => {
   const [result, err] = await da.resetCustomers();
   if (result) {
     res.send(result);
@@ -30,8 +48,8 @@ app.get("/reset", async (req, res) => {
   }
 });
 
-// ✅ POST /customers
-app.post("/customers", async (req, res) => {
+// POST new customer (✔️ Protected)
+app.post("/customers", verifyApiKey, async (req, res) => {
   const newCustomer = req.body;
 
   if (!newCustomer || Object.keys(newCustomer).length === 0) {
@@ -48,7 +66,8 @@ app.post("/customers", async (req, res) => {
   }
 });
 
-app.get("/customers/:id", async (req, res) => {
+// GET customer by id (✔️ Protected)
+app.get("/customers/:id", verifyApiKey, async (req, res) => {
   const id = req.params.id;
   const [cust, err] = await da.getCustomerById(id);
   if (cust) {
@@ -58,7 +77,8 @@ app.get("/customers/:id", async (req, res) => {
   }
 });
 
-app.put("/customers/:id", async (req, res) => {
+// PUT update customer (✔️ Protected)
+app.put("/customers/:id", verifyApiKey, async (req, res) => {
   const id = req.params.id;
   const updatedCustomer = req.body;
 
@@ -78,7 +98,8 @@ app.put("/customers/:id", async (req, res) => {
   }
 });
 
-app.delete("/customers/:id", async (req, res) => {
+// DELETE customer by id (✔️ Protected)
+app.delete("/customers/:id", verifyApiKey, async (req, res) => {
   const id = req.params.id;
   const [message, errMessage] = await da.deleteCustomerById(id);
   if (message) {
