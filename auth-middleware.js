@@ -1,18 +1,20 @@
-require("dotenv").config();
+const { apiKeys } = require("./apiKeyStore");
 
 function verifyApiKey(req, res, next) {
   const apiKeyHeader = req.headers["x-api-key"];
-  const validKey = req.app.locals.apiKey;
 
   if (!apiKeyHeader) {
     return res.status(401).send("API Key is missing");
   }
 
-  if (apiKeyHeader !== validKey) {
+  // Check if the key exists in the Map values
+  const valid = Array.from(apiKeys.values()).includes(apiKeyHeader);
+
+  if (!valid) {
     return res.status(403).send("API Key is invalid");
   }
 
-  next(); // 🔑 Proceed to the next middleware or route
+  next();
 }
 
 module.exports = verifyApiKey;

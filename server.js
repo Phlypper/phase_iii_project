@@ -2,33 +2,40 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
+
 const da = require("./data-access");
 const verifyApiKey = require("./auth-middleware");
+const { addApiKey } = require("./apiKeyStore");
 
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Check for API_KEY in env or CLI
-let apiKey = process.env.API_KEY;
-const cliArg = process.argv.find((arg) => arg.startsWith("api_key="));
-if (cliArg) {
-  apiKey = cliArg.split("=")[1];
-}
-
-// Exit if no API_KEY is set
-if (!apiKey) {
-  console.error(
-    "❌ API Key not set. Please provide it via .env or as a command-line argument: api_key=yourkey"
-  );
+// 1. Initialize default API key from env or CLI
+const defaultKey = process.env.API_KEY || process.argv[2];
+if (!defaultKey) {
+  console.error("❌ No API key provided in .env or command line argument");
   process.exit(1);
 }
-app.locals.apiKey = apiKey;
+addApiKey("default", defaultKey);
 
-// Middleware setup
+// 2. Middleware setup
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// GET all customers (✔️ Protected)
+// 3. Issue new API key for given email
+app.get("/apikey", (req, res) => {
+  const email = req.query.email;
+  if (!email) {
+    return res.status(400).send("Missing email query parameter");
+  }
+
+  const key = addApiKey(email);
+  res.send({ email, apiKey: key });
+});
+
+// 4. Protected CRUD routes
+
+// GET all customers
 app.get("/customers", verifyApiKey, async (req, res) => {
   const [cust, err] = await da.getCustomers();
   if (cust) {
@@ -38,23 +45,23 @@ app.get("/customers", verifyApiKey, async (req, res) => {
   }
 });
 
-// GET reset endpoint (✔️ Protected)
-app.get("/reset", verifyApiKey, async (req, res) => {
-  const [result, err] = await da.resetCustomers();
-  if (result) {
-    res.send(result);
+// GET customer by ID
+app.get("/customers/:id", verifyApiKey, async (req, res) => {
+  const id = req.params.id;
+  const [cust, err] = await da.getCustomerById(id);
+  if (cust) {
+    res.send(cust);
   } else {
-    res.status(500).send(err);
+    res.status(404).send(err);
   }
 });
 
-// POST new customer (✔️ Protected)
+// POST add new customer
 app.post("/customers", verifyApiKey, async (req, res) => {
   const newCustomer = req.body;
 
   if (!newCustomer || Object.keys(newCustomer).length === 0) {
-    res.status(400).send("missing request body");
-    return;
+    return res.status(400).send("Missing request body");
   }
 
   const [status, id, errMessage] = await da.addCustomer(newCustomer);
@@ -66,25 +73,12 @@ app.post("/customers", verifyApiKey, async (req, res) => {
   }
 });
 
-// GET customer by id (✔️ Protected)
-app.get("/customers/:id", verifyApiKey, async (req, res) => {
-  const id = req.params.id;
-  const [cust, err] = await da.getCustomerById(id);
-  if (cust) {
-    res.send(cust);
-  } else {
-    res.status(404).send(err);
-  }
-});
-
-// PUT update customer (✔️ Protected)
+// PUT update customer by ID
 app.put("/customers/:id", verifyApiKey, async (req, res) => {
-  const id = req.params.id;
   const updatedCustomer = req.body;
 
   if (!updatedCustomer || Object.keys(updatedCustomer).length === 0) {
-    res.status(400).send("missing request body");
-    return;
+    return res.status(400).send("Missing request body");
   }
 
   delete updatedCustomer._id;
@@ -98,10 +92,11 @@ app.put("/customers/:id", verifyApiKey, async (req, res) => {
   }
 });
 
-// DELETE customer by id (✔️ Protected)
+// DELETE customer by ID
 app.delete("/customers/:id", verifyApiKey, async (req, res) => {
   const id = req.params.id;
   const [message, errMessage] = await da.deleteCustomerById(id);
+
   if (message) {
     res.send(message);
   } else {
@@ -109,8 +104,17 @@ app.delete("/customers/:id", verifyApiKey, async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+// GET reset customers
+app.get("/reset", verifyApiKey, async (req, res) => {
+  const [result, err] = await da.resetCustomers();
+  if (result) {
+    res.send(result);
+  } else {
+    res.status(500).send(err);
+  }
 });
-// Stage10 CLI support is working ✅
-// Stage 11: CLI API key override support added ✅
+
+// 5. Start server
+app.listen(port, () => {
+  console.log(`✅ Server listening on port ${port}`);
+});
