@@ -112,3 +112,4 @@ app.delete("/customers/:id", verifyApiKey, async (req, res) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+// Stage10 CLI support is working ✅
