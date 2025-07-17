@@ -1,20 +1,37 @@
-const { apiKeys } = require("./apiKeyStore");
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 
-function verifyApiKey(req, res, next) {
-  const apiKeyHeader = req.headers["x-api-key"];
+function verifyApiKey(apiKeysMap) {
+  return (req, res, next) => {
+    let apiKey = req.headers["x-api-key"];
 
-  if (!apiKeyHeader) {
-    return res.status(401).send("API Key is missing");
-  }
+    // Support query param fallback
+    if (!apiKey && req.query.api_key) {
+      apiKey = req.query.api_key;
+    }
 
-  // Check if the key exists in the Map values
-  const valid = Array.from(apiKeys.values()).includes(apiKeyHeader);
+    // Check for missing key
+    if (!apiKey) {
+      return res.status(401).send("API Key is missing");
+    }
 
-  if (!valid) {
-    return res.status(403).send("API Key is invalid");
-  }
+    // Defensive check for Map
+    if (!apiKeysMap || typeof apiKeysMap.values !== "function") {
+      return res
+        .status(500)
+        .send("Server misconfiguration: API key map not found.");
+    }
 
-  next();
+    // Validate against stored keys
+    const isValid = Array.from(apiKeysMap.values()).includes(apiKey);
+
+    if (!isValid) {
+      return res.status(403).send("API Key is invalid");
+    }
+
+    next();
+  };
 }
 
 module.exports = verifyApiKey;
