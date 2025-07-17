@@ -1,116 +1,103 @@
-const MongoClient = require("mongodb").MongoClient;
-const dbName = "custdb";
-const baseUrl = "mongodb://127.0.0.1:27017";
+const { MongoClient } = require("mongodb");
+const uri = "mongodb://localhost:27017";
+const client = new MongoClient(uri);
+const dbName = "customerDB";
 const collectionName = "customers";
-const connectString = baseUrl + "/" + dbName;
-let collection;
 
-async function dbStartup() {
-  const client = new MongoClient(connectString);
-  await client.connect();
-  collection = client.db(dbName).collection(collectionName);
-}
-
-async function getCustomers() {
+async function getCustomers(filter = {}) {
   try {
-    const customers = await collection.find().toArray();
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+    const customers = await collection.find(filter).toArray();
     return [customers, null];
   } catch (err) {
-    console.log(err.message);
     return [null, err.message];
-  }
-}
-
-async function resetCustomers() {
-  let data = [
-    { id: 0, name: "Mary Jackson", email: "maryj@abc.com", password: "maryj" },
-    {
-      id: 1,
-      name: "Karen Addams",
-      email: "karena@abc.com",
-      password: "karena",
-    },
-    {
-      id: 2,
-      name: "Scott Ramsey",
-      email: "scottr@abc.com",
-      password: "scottr",
-    },
-  ];
-
-  try {
-    await collection.deleteMany({});
-    await collection.insertMany(data);
-    const customers = await collection.find().toArray();
-    const message =
-      "data was refreshed. There are now " +
-      customers.length +
-      " customer records!";
-    return [message, null];
-  } catch (err) {
-    console.log(err.message);
-    return [null, err.message];
-  }
-}
-
-// ✅ POST: Add a new customer
-async function addCustomer(newCustomer) {
-  try {
-    const insertResult = await collection.insertOne(newCustomer);
-    return ["success", insertResult.insertedId, null];
-  } catch (err) {
-    console.log(err.message);
-    return ["fail", null, err.message];
   }
 }
 
 async function getCustomerById(id) {
   try {
-    const customer = await collection.findOne({ id: +id }); // ensures numeric lookup
-    if (!customer) {
-      return [null, "invalid customer number"];
+    const [customers, err] = await getCustomers({ id: parseInt(id) });
+    if (customers && customers.length > 0) {
+      return [customers[0], null];
+    } else {
+      return [null, "Customer not found"];
     }
-    return [customer, null];
   } catch (err) {
-    console.log(err.message);
     return [null, err.message];
   }
 }
 
-async function updateCustomer(updatedCustomer) {
+async function addCustomer(customer) {
   try {
-    const filter = { id: updatedCustomer.id };
-    const setData = { $set: updatedCustomer };
-    const updateResult = await collection.updateOne(filter, setData);
-    return ["one record updated", null];
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+    const result = await collection.insertOne(customer);
+    return ["success", result.insertedId, null];
   } catch (err) {
-    console.log(err.message);
+    return ["error", null, err.message];
+  }
+}
+
+async function updateCustomer(customer) {
+  try {
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+    const result = await collection.updateOne(
+      { id: customer.id },
+      { $set: customer }
+    );
+    if (result.matchedCount === 0) {
+      return [null, "Customer not found"];
+    }
+    return ["Customer updated", null];
+  } catch (err) {
     return [null, err.message];
   }
 }
 
 async function deleteCustomerById(id) {
   try {
-    const deleteResult = await collection.deleteOne({ id: +id });
-    if (deleteResult.deletedCount === 0) {
-      return [null, "no record deleted"];
-    } else if (deleteResult.deletedCount === 1) {
-      return ["one record deleted", null];
-    } else {
-      return [null, "error deleting records"];
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+    const result = await collection.deleteOne({ id: parseInt(id) });
+    if (result.deletedCount === 0) {
+      return [null, "Customer not found"];
     }
+    return ["Customer deleted", null];
   } catch (err) {
-    console.log(err.message);
     return [null, err.message];
   }
 }
 
-dbStartup();
+async function resetCustomers() {
+  const defaultCustomers = [
+    { id: 0, name: "Alice", email: "alice@abc.com", password: "apple" },
+    { id: 1, name: "Bob", email: "bob@abc.com", password: "banana" },
+    { id: 2, name: "Carol", email: "carol@abc.com", password: "cherry" },
+  ];
+
+  try {
+    await client.connect();
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+    await collection.deleteMany({});
+    await collection.insertMany(defaultCustomers);
+    return ["Customers reset", null];
+  } catch (err) {
+    return [null, err.message];
+  }
+}
+
 module.exports = {
   getCustomers,
-  resetCustomers,
-  addCustomer,
   getCustomerById,
+  addCustomer,
   updateCustomer,
   deleteCustomerById,
+  resetCustomers,
 };

@@ -51,11 +51,11 @@ function saveApiKeys() {
   );
 }
 
-// Express Middleware
+// Middleware
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ GET /apikey – generate + return key for user
+// 🔐 GET /apikey – generate + return key for user
 app.get("/apikey", (req, res) => {
   const email = req.query.email;
 
@@ -70,7 +70,7 @@ app.get("/apikey", (req, res) => {
   res.send({ email, apiKey: newKey });
 });
 
-// ✅ GET /apikey/reset – clear map + delete file
+// 🔄 GET /apikey/reset – clear map + delete file
 app.get("/apikey/reset", verifyApiKey(apiKeys), (req, res) => {
   apiKeys.clear();
   if (fs.existsSync(API_KEYS_FILE)) {
@@ -78,6 +78,39 @@ app.get("/apikey/reset", verifyApiKey(apiKeys), (req, res) => {
   }
   console.log("🔁 All API keys cleared and file deleted.");
   res.send("All API keys have been reset.");
+});
+
+// ✅ GET /customers/find – search by 1 filter key
+app.get("/customers/find", async (req, res) => {
+  const keys = Object.keys(req.query);
+
+  if (keys.length === 0) {
+    return res.status(400).send("query string is required");
+  }
+
+  if (keys.length > 1) {
+    return res.status(400).send("only one query parameter allowed");
+  }
+
+  const key = keys[0];
+  const value = req.query[key];
+
+  const validKeys = ["id", "email", "password"];
+  if (!validKeys.includes(key)) {
+    return res
+      .status(400)
+      .send("name must be one of the following (id, email, password)");
+  }
+
+  let filter = {};
+  filter[key] = key === "id" ? parseInt(value) : value;
+
+  const [customers, err] = await da.getCustomers(filter);
+  if (customers && customers.length > 0) {
+    res.send(customers);
+  } else {
+    res.status(404).send("no matching customer documents found");
+  }
 });
 
 // ✅ GET all customers
@@ -131,14 +164,13 @@ app.delete("/customers/:id", verifyApiKey(apiKeys), async (req, res) => {
   else res.status(404).send(errMsg);
 });
 
-// ✅ GET /reset – reset customers (also protected)
+// ✅ GET /reset – reset customers (protected)
 app.get("/reset", verifyApiKey(apiKeys), async (req, res) => {
   const [result, err] = await da.resetCustomers();
   if (result) res.send(result);
   else res.status(500).send(err);
 });
 
-// Server start
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
