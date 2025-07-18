@@ -55,15 +55,21 @@ function saveApiKeys() {
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 🔐 GET /apikey – generate + return key for user
-app.get("/apikey", (req, res) => {
+// 🔐 GET /apikey – generate + return key for user (with duplicate check)
+app.get("/apikey", verifyApiKey(apiKeys), (req, res) => {
   const email = req.query.email;
 
   if (!email) {
     return res.status(400).send("Missing email query parameter");
   }
 
-  const newKey = crypto.randomBytes(16).toString("hex"); // 32-char key
+  if (apiKeys.has(email)) {
+    return res
+      .status(409)
+      .send("API key already exists for this email address");
+  }
+
+  const newKey = crypto.randomBytes(16).toString("hex");
   apiKeys.set(email, newKey);
   saveApiKeys();
   console.log("🔑 New API key added:", Object.fromEntries(apiKeys));
@@ -128,13 +134,33 @@ app.get("/customers/:id", verifyApiKey(apiKeys), async (req, res) => {
   else res.status(404).send(err);
 });
 
-// ✅ POST add customer
+// ✅ POST add customer & test for duplicates
 app.post("/customers", verifyApiKey(apiKeys), async (req, res) => {
   const newCustomer = req.body;
+
   if (!newCustomer || Object.keys(newCustomer).length === 0) {
     return res.status(400).send("Missing request body");
   }
 
+  // Check for duplicate based on id or email
+  const [existingCustomers, fetchErr] = await da.getCustomers();
+  if (fetchErr) {
+    return res.status(500).send("Error fetching existing customers");
+  }
+
+  const duplicate = existingCustomers.find(
+    (c) => c.id === newCustomer.id || c.email === newCustomer.email
+  );
+
+  if (duplicate) {
+    return res
+      .status(409)
+      .send(
+        "Duplicate customer: a customer with this ID or email already exists"
+      );
+  }
+
+  // Add if no duplicate
   const [status, id, errMessage] = await da.addCustomer(newCustomer);
   if (status === "success") {
     res.status(201).send({ ...newCustomer, _id: id });
